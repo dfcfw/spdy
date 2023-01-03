@@ -1,2 +1,3 @@
-# spdy
+# SPDY
+
 A multiplexed stream library.
