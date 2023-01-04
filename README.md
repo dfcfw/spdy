@@ -28,17 +28,20 @@ A multiplexed stream library.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-### Flag 类型
+Flag: `uint8`
 
-> Flag 为占用 `1 byte`
+Stream ID: `uint32`
 
-#### SYN - 新建连接
+Data Length: `uint16`
+
+Data: 变长，由 `Data Length` 决定
+
+### SYN - 新建连接
 
 SYN 为变长帧
 
-#### FIN - 结束连接
+### FIN - 结束连接
 
 FIN 帧为定长帧（7 bytes），只能包含 `Flag` `Stream ID` `Data Length` 信息，且 `Data Length` 填充为 `0`
 
-#### DAT - 数据报文
-
+### DAT - 数据报文
