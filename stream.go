@@ -2,90 +2,99 @@ package spdy
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type Streamer interface {
-	net.Conn
-	ID() uint32
-}
-
 type stream struct {
-	id   uint32
-	mux  Muxer
-	syn  atomic.Bool // 是否握手
-	wmu  sync.Mutex  // 写锁
-	rmu  sync.Mutex
-	cond sync.Cond
-	buf  *bytes.Buffer
-	err  error
+	id     uint32
+	mux    Muxer
+	syn    atomic.Bool // 是否握手
+	wmu    sync.Locker // 写锁
+	cond   *sync.Cond
+	buf    *bytes.Buffer
+	err    error       // 错误信息
+	closed atomic.Bool // 保证 close 方法只被执行一次
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func (stm *stream) read(p []byte) (int, error) {
-	stm.rmu.Lock()
-	defer stm.rmu.Unlock()
+func (stm *stream) ReadFrom(r io.Reader) (int64, error) {
+	stm.cond.L.Lock()
+	defer stm.cond.L.Unlock()
 
+	if err := stm.err; err != nil {
+		return 0, err
+	}
+
+	n, err := stm.buf.ReadFrom(r)
+
+	stm.cond.Broadcast()
+
+	return n, err
+}
+
+func (stm *stream) Read(p []byte) (n int, err error) {
+	stm.cond.L.Lock()
 	for {
 		if buf := stm.buf; buf.Len() != 0 {
-			return buf.Read(p)
+			n, err = buf.Read(p)
+			break
 		}
-		if err := stm.err; err != nil {
-			return 0, err
+		if err = stm.err; err != nil {
+			break
 		}
 		stm.cond.Wait()
 	}
-}
+	stm.cond.L.Unlock()
 
-func (stm *stream) write(p []byte) (int, error) {
-	var syn bool
-	if stm.syn.CompareAndSwap(false, true) {
-		syn = true
-	}
-
-	psz := len(p)
-	stm.wmu.Lock()
-	defer stm.wmu.Unlock()
-
-}
-
-func (stm *stream) ID() uint32 {
-	return stm.id
-}
-
-func (stm *stream) Read(b []byte) (int, error) {
-	//TODO implement me
-	panic("implement me")
+	return
 }
 
 func (stm *stream) Write(b []byte) (int, error) {
-	//TODO implement me
-	panic("implement me")
+	stm.wmu.Lock()
+	defer stm.wmu.Unlock()
+
+	return 0, nil
 }
+
+func (stm *stream) ID() uint32                       { return stm.id }
+func (stm *stream) LocalAddr() net.Addr              { return stm.mux.LocalAddr() }
+func (stm *stream) RemoteAddr() net.Addr             { return stm.mux.RemoteAddr() }
+func (stm *stream) SetDeadline(time.Time) error      { return nil }
+func (stm *stream) SetReadDeadline(time.Time) error  { return nil }
+func (stm *stream) SetWriteDeadline(time.Time) error { return nil }
 
 func (stm *stream) Close() error {
-	//TODO implement me
-	panic("implement me")
+	return stm.closeError(io.EOF)
 }
 
-func (stm *stream) LocalAddr() net.Addr {
-	return stm.mux.LocalAddr()
+func (stm *stream) receive(p []byte) (int, error) {
+	stm.cond.L.Lock()
+	n, err := stm.buf.Write(p)
+	stm.cond.L.Unlock()
+
+	stm.cond.Broadcast()
+
+	return n, err
 }
 
-func (stm *stream) RemoteAddr() net.Addr {
-	return stm.mux.RemoteAddr()
-}
+func (stm *stream) closeError(err error) error {
+	if !stm.closed.CompareAndSwap(false, true) {
+		return io.ErrClosedPipe
+	}
 
-func (stm *stream) SetDeadline(t time.Time) error {
-	return nil
-}
+	stm.cond.L.Lock()
+	stm.err = err
+	stm.cond.L.Unlock()
 
-func (stm *stream) SetReadDeadline(t time.Time) error {
-	return nil
-}
+	stm.cancel()
 
-func (stm *stream) SetWriteDeadline(t time.Time) error {
-	return nil
+	stm.cond.Broadcast()
+
+	return err
 }
