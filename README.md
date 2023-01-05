@@ -38,9 +38,11 @@ Data: 变长，由 `Data Length` 决定
 
 ### SYN - 新建连接
 
-SYN 为变长帧
+SYN 为变长帧，代表新建虚拟连接
 
 ### FIN - 结束连接
+
+FIN 为虚拟连接的最后一帧，收到 FIN 则代表对方已经断开了虚拟连接，
 
 FIN 帧为定长帧（7 bytes），只能包含 `Flag` `Stream ID` `Data Length` 信息，且 `Data Length` 填充为 `0`
 

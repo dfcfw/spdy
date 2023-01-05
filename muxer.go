@@ -138,7 +138,7 @@ func (mux *muxer) read() {
 	for {
 		_, err := io.ReadFull(mux.tran, header[:])
 		if err != nil {
-			log.Println("---> closed")
+			log.Printf("---> closed: %v", err)
 			break
 		}
 
@@ -161,16 +161,14 @@ func (mux *muxer) read() {
 		}
 
 		if flag == flagFIN {
-			mux.delStream(stmID)
-			_ = stm.closeError(io.EOF)
+			_ = stm.closeError(io.EOF, false)
 		} else if size > 0 && (flag == flagSYN || flag == flagDAT) {
 			dat := make([]byte, size)
 			if _, err = io.ReadFull(mux.tran, dat); err == nil {
 				_, err = stm.receive(dat)
 			}
 			if err != nil {
-				mux.delStream(stmID)
-				_ = stm.closeError(err)
+				_ = stm.closeError(err, true)
 			}
 		}
 	}

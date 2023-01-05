@@ -14,29 +14,14 @@ import (
 type stream struct {
 	id     uint32
 	mux    *muxer
-	syn    atomic.Bool // 是否握手
-	wmu    sync.Locker // 写锁
+	syn    bool        // 是否已经发送了握手帧
+	wmu    sync.Locker // 数据写锁
 	cond   *sync.Cond
 	buf    *bytes.Buffer
 	err    error       // 错误信息
 	closed atomic.Bool // 保证 close 方法只被执行一次
 	ctx    context.Context
 	cancel context.CancelFunc
-}
-
-func (stm *stream) ReadFrom(r io.Reader) (int64, error) {
-	stm.cond.L.Lock()
-	defer stm.cond.L.Unlock()
-
-	if err := stm.err; err != nil {
-		return 0, err
-	}
-
-	n, err := stm.buf.ReadFrom(r)
-
-	stm.cond.Broadcast()
-
-	return n, err
 }
 
 func (stm *stream) Read(p []byte) (n int, err error) {
@@ -63,13 +48,14 @@ func (stm *stream) Write(b []byte) (int, error) {
 		return 0, nil
 	}
 
-	flag := flagSYN
-	if !stm.syn.CompareAndSwap(false, true) {
-		flag = flagDAT
-	}
-
 	stm.wmu.Lock()
 	defer stm.wmu.Unlock()
+
+	flag := flagDAT
+	if !stm.syn {
+		stm.syn = true
+		flag = flagSYN
+	}
 
 	for bsz > 0 {
 		n := bsz
@@ -97,7 +83,7 @@ func (stm *stream) SetReadDeadline(time.Time) error  { return nil }
 func (stm *stream) SetWriteDeadline(time.Time) error { return nil }
 
 func (stm *stream) Close() error {
-	return stm.closeError(io.EOF)
+	return stm.closeError(io.EOF, true)
 }
 
 func (stm *stream) receive(p []byte) (int, error) {
@@ -110,9 +96,16 @@ func (stm *stream) receive(p []byte) (int, error) {
 	return n, err
 }
 
-func (stm *stream) closeError(err error) error {
+func (stm *stream) closeError(err error, fin bool) error {
 	if !stm.closed.CompareAndSwap(false, true) {
 		return io.ErrClosedPipe
+	}
+
+	stmID := stm.id
+	stm.mux.delStream(stmID)
+
+	if fin {
+		_, _ = stm.mux.write(flagFIN, stmID, nil)
 	}
 
 	stm.cond.L.Lock()
@@ -120,7 +113,6 @@ func (stm *stream) closeError(err error) error {
 	stm.cond.L.Unlock()
 
 	stm.cancel()
-
 	stm.cond.Broadcast()
 
 	return err
