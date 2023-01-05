@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 )
 
 type muxer struct {
+	wmu     sync.Mutex
 	tran    net.Conn
 	stmID   atomic.Uint32
 	mutex   sync.RWMutex
-	streams map[uint32]Streamer
-	accepts chan Streamer
+	streams map[uint32]*stream
+	accepts chan *stream
 	ctx     context.Context
 	cancel  context.CancelFunc
 }
@@ -65,7 +67,7 @@ func (mux *muxer) Range(fn func(Streamer) bool) {
 	}
 }
 
-func (mux *muxer) newStream() (Streamer, error) {
+func (mux *muxer) newStream() (*stream, error) {
 	select {
 	case <-mux.ctx.Done():
 		return nil, io.ErrClosedPipe
@@ -89,7 +91,7 @@ func (mux *muxer) newStream() (Streamer, error) {
 	return stm, nil
 }
 
-func (mux *muxer) synStream(stmID uint32) Streamer {
+func (mux *muxer) synStream(stmID uint32) *stream {
 	cond := sync.NewCond(new(sync.Mutex))
 	ctx, cancel := context.WithCancel(mux.ctx)
 
@@ -104,19 +106,25 @@ func (mux *muxer) synStream(stmID uint32) Streamer {
 	}
 }
 
-func (mux *muxer) putStream(stm Streamer) {
+func (mux *muxer) putStream(stm *stream) {
 	id := stm.ID()
 	mux.mutex.Lock()
 	mux.streams[id] = stm
 	mux.mutex.Unlock()
 }
 
-func (mux *muxer) getStream(id uint32) Streamer {
+func (mux *muxer) getStream(id uint32) *stream {
 	mux.mutex.RLock()
 	stm := mux.streams[id]
 	mux.mutex.RUnlock()
 
 	return stm
+}
+
+func (mux *muxer) delStream(id uint32) {
+	mux.mutex.Lock()
+	delete(mux.streams, id)
+	mux.mutex.Unlock()
 }
 
 func (mux *muxer) read() {
@@ -130,32 +138,50 @@ func (mux *muxer) read() {
 	for {
 		_, err := io.ReadFull(mux.tran, header[:])
 		if err != nil {
+			log.Println("---> closed")
 			break
 		}
+
+		log.Printf("---> %s\n", header)
 
 		stmID := header.streamID()
 		size := header.size()
 		flag := header.flag()
-		if flag&flagSYN == flagSYN {
-			stm := mux.synStream(stmID)
+
+		var stm *stream
+		if flag == flagSYN {
+			stm = mux.synStream(stmID)
 			mux.putStream(stm)
 			mux.accepts <- stm
+		} else {
+			stm = mux.getStream(stmID)
 		}
-		if flag&flagPSH == flagPSH {
-
-		}
-		if flag&flagFIN == flagFIN {
-
+		if stm == nil {
+			continue
 		}
 
-		switch flag {
-		case flagSYN:
-
-			// 读取数据
-			stm.Read()
-
-		case flagFIN:
-		case flagPSH:
+		if flag == flagFIN {
+			mux.delStream(stmID)
+			_ = stm.closeError(io.EOF)
+		} else if size > 0 && (flag == flagSYN || flag == flagDAT) {
+			dat := make([]byte, size)
+			if _, err = io.ReadFull(mux.tran, dat); err == nil {
+				_, err = stm.receive(dat)
+			}
+			if err != nil {
+				mux.delStream(stmID)
+				_ = stm.closeError(err)
+			}
 		}
 	}
+}
+
+func (mux *muxer) write(flag uint8, sid uint32, p []byte) (int, error) {
+	fm := frame{flag: flag, sid: sid, data: p}
+	dat := fm.pack()
+
+	mux.wmu.Lock()
+	defer mux.wmu.Unlock()
+
+	return mux.tran.Write(dat)
 }

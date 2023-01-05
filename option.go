@@ -49,8 +49,8 @@ func (opt option) muxer(tran net.Conn) *muxer {
 	ctx, cancel := context.WithCancel(context.Background())
 	mux := &muxer{
 		tran:    tran,
-		streams: make(map[uint32]Streamer, capacity),
-		accepts: make(chan Streamer, backlog),
+		streams: make(map[uint32]*stream, capacity),
+		accepts: make(chan *stream, backlog),
 		ctx:     ctx,
 		cancel:  cancel,
 	}

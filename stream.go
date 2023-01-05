@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -12,7 +13,7 @@ import (
 
 type stream struct {
 	id     uint32
-	mux    Muxer
+	mux    *muxer
 	syn    atomic.Bool // 是否握手
 	wmu    sync.Locker // 写锁
 	cond   *sync.Cond
@@ -56,10 +57,36 @@ func (stm *stream) Read(p []byte) (n int, err error) {
 }
 
 func (stm *stream) Write(b []byte) (int, error) {
+	const max = math.MaxUint16
+	bsz := len(b)
+	if bsz == 0 {
+		return 0, nil
+	}
+
+	flag := flagSYN
+	if !stm.syn.CompareAndSwap(false, true) {
+		flag = flagDAT
+	}
+
 	stm.wmu.Lock()
 	defer stm.wmu.Unlock()
 
-	return 0, nil
+	for bsz > 0 {
+		n := bsz
+		if n > max {
+			n = max
+		}
+
+		if _, err := stm.mux.write(flag, stm.id, b[:n]); err != nil {
+			return 0, err
+		}
+
+		flag = flagDAT
+		b = b[n:]
+		bsz = len(b)
+	}
+
+	return bsz, nil
 }
 
 func (stm *stream) ID() uint32                       { return stm.id }

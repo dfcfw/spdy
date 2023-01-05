@@ -6,11 +6,12 @@ import (
 )
 
 const (
-	flagNOP uint8 = 0b00000000 // 没有操作
-	flagSYN       = 0b00000001 // 握手信号
-	flagFIN       = 0b00000010 // 结束信号
-	flagPSH       = 0b00000100 // 发送数据
+	flagSYN uint8 = iota // 握手信号
+	flagFIN              // 结束信号
+	flagDAT              // 发送数据
+)
 
+const (
 	sizeofFlag   = 1
 	sizeofSid    = 4
 	sizeofSize   = 2
@@ -20,12 +21,18 @@ const (
 type frame struct {
 	flag uint8
 	sid  uint32
-	size uint16
 	data []byte
 }
 
 func (fm frame) pack() []byte {
-	return nil
+	dsz := len(fm.data)
+	dat := make([]byte, sizeofHeader+dsz)
+	dat[0] = fm.flag
+	binary.BigEndian.PutUint32(dat[sizeofFlag:], fm.sid)
+	binary.BigEndian.PutUint16(dat[sizeofFlag+sizeofSid:], uint16(dsz))
+	copy(dat[sizeofHeader:], fm.data)
+
+	return dat
 }
 
 type frameHeader [sizeofHeader]byte
@@ -47,23 +54,15 @@ func (fh frameHeader) String() string {
 	sid := fh.streamID()
 	size := fh.size()
 	var str string
-	if flag&flagSYN == flagSYN {
-		str += "SYN|"
-	}
-	if flag&flagFIN == flagFIN {
-		str += "FIN|"
-	}
-	if flag&flagPSH == flagPSH {
-		str += "PSH|"
-	}
-	if sz := len(str); sz > 0 {
-		str = str[:sz-1]
-	} else {
-		if flag == flagNOP {
-			str = "NOP"
-		} else {
-			str = "UNKNOWN"
-		}
+	switch flag {
+	case flagSYN:
+		str = "SYN"
+	case flagFIN:
+		str = "FIN"
+	case flagDAT:
+		str = "DAT"
+	default:
+		str = "ERR"
 	}
 
 	return fmt.Sprintf("Frame Flag: %s, StreamID: %d, Datasize: %d", str, sid, size)
