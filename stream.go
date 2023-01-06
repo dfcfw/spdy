@@ -104,7 +104,7 @@ func (stm *stream) closeError(err error, fin bool) error {
 	stmID := stm.id
 	stm.mux.delStream(stmID)
 
-	if fin {
+	if fin && stm.syn {
 		_, _ = stm.mux.write(flagFIN, stmID, nil)
 	}
 

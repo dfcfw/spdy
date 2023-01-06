@@ -74,6 +74,20 @@ func Test_HTTP_Client(t *testing.T) {
 	}
 
 	// TODO: 创建多路复用
-	spdy.Client(conn)
+	//mux := spdy.Client(conn)
+	//dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
+	//	if network == "tcp" && addr == "em.com:80" {
+	//		return mux.Dial()
+	//	}
+	//	return nil, &net.AddrError{Addr: addr}
+	//}
+	//
+	//transport := &http.Transport{
+	//	DialContext: dialFn,
+	//}
+	//
+	//cli := &http.Client{
+	//	Transport: transport,
+	//}
 
 }

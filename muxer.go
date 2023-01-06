@@ -96,6 +96,7 @@ func (mux *muxer) synStream(stmID uint32) *stream {
 
 	return &stream{
 		id:     stmID,
+		syn:    true,
 		mux:    mux,
 		wmu:    new(sync.Mutex),
 		cond:   cond,
