@@ -2,18 +2,6 @@
 
 A multiplexed stream library.
 
-## 参考链接
-
-[spdystream](https://github.com/moby/spdystream)
-
-[yamux](https://github.com/hashicorp/yamux)
-
-[smux](https://github.com/xtaci/smux)
-
-[muxado](https://github.com/inconshreveable/muxado)
-
-[multiplex](https://github.com/whyrusleeping/go-smux-multiplex)
-
 ## 帧格式
 
 ```text
@@ -47,3 +35,15 @@ FIN 为虚拟连接的最后一帧，收到 FIN 则代表对方已经断开了�
 FIN 帧为定长帧（7 bytes），只能包含 `Flag` `Stream ID` `Data Length` 信息，且 `Data Length` 填充为 `0`
 
 ### DAT - 数据报文
+
+## 参考链接
+
+[spdystream](https://github.com/moby/spdystream)
+
+[yamux](https://github.com/hashicorp/yamux)
+
+[smux](https://github.com/xtaci/smux)
+
+[muxado](https://github.com/inconshreveable/muxado)
+
+[multiplex](https://github.com/whyrusleeping/go-smux-multiplex)
