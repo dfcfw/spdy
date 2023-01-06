@@ -57,8 +57,8 @@ func (stm *stream) Write(b []byte) (int, error) {
 		flag = flagSYN
 	}
 
-	for bsz > 0 {
-		n := bsz
+	n := bsz
+	for n > 0 {
 		if n > max {
 			n = max
 		}
@@ -69,7 +69,7 @@ func (stm *stream) Write(b []byte) (int, error) {
 
 		flag = flagDAT
 		b = b[n:]
-		bsz = len(b)
+		n = len(b)
 	}
 
 	return bsz, nil
