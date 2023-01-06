@@ -2,6 +2,8 @@
 
 A multiplexed stream library.
 
+尚未实现 `流量控制`、`stream 并发数控制`、`stream 读写超时控制`
+
 - [Example](https://github.com/dfcfw/spdy-example)
 
 ## 帧格式
