@@ -138,11 +138,8 @@ func (mux *muxer) read() {
 	for {
 		_, err := io.ReadFull(mux.tran, header[:])
 		if err != nil {
-			log.Printf("---> closed: %v", err)
 			break
 		}
-
-		log.Printf("---> %s\n", header)
 
 		stmID := header.streamID()
 		size := header.size()
