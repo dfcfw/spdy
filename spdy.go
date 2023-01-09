@@ -9,7 +9,7 @@ type Muxer interface {
 
 	RemoteAddr() net.Addr
 
-	Dial() (net.Conn, error)
+	Dial() (Streamer, error)
 }
 
 type Streamer interface {

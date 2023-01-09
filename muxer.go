@@ -24,7 +24,7 @@ func (mux *muxer) Addr() net.Addr       { return mux.LocalAddr() }
 func (mux *muxer) LocalAddr() net.Addr  { return mux.tran.LocalAddr() }
 func (mux *muxer) RemoteAddr() net.Addr { return mux.tran.RemoteAddr() }
 
-func (mux *muxer) Dial() (net.Conn, error) {
+func (mux *muxer) Dial() (Streamer, error) {
 	stm, err := mux.newStream()
 	if err != nil {
 		return nil, err
