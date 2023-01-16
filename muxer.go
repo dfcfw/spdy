@@ -37,7 +37,10 @@ func (mux *muxer) Dial() (Streamer, error) {
 
 func (mux *muxer) Accept() (net.Conn, error) {
 	select {
-	case stm := <-mux.accepts:
+	case stm, ok := <-mux.accepts:
+		if !ok {
+			return nil, io.ErrClosedPipe
+		}
 		return stm, nil
 	case <-mux.ctx.Done():
 		return nil, io.ErrClosedPipe
