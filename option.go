@@ -52,14 +52,13 @@ func (opt option) muxer(tran net.Conn) *muxer {
 	if capacity <= 0 {
 		capacity = 64
 	}
-	passwd := opt.passwd
 
 	ctx, cancel := context.WithCancel(context.Background())
 	mux := &muxer{
 		tran:    tran,
 		streams: make(map[uint32]*stream, capacity),
 		accepts: make(chan *stream, backlog),
-		passwd:  passwd,
+		passwd:  opt.passwd,
 		ctx:     ctx,
 		cancel:  cancel,
 	}
