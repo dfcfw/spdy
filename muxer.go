@@ -186,8 +186,8 @@ func (mux *muxer) write(flag uint8, sid uint32, p []byte) (int, error) {
 
 	if psz := len(mux.passwd); psz != 0 {
 		for i, b := range dat {
-			mux.pwn = (mux.pwn + 1) % psz
-			enc := mux.passwd[mux.pwn]
+			mux.prn = (mux.prn + 1) % psz
+			enc := mux.passwd[mux.prn]
 			dat[i] = b ^ enc
 		}
 	}
