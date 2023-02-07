@@ -16,6 +16,9 @@ type muxer struct {
 	mutex   sync.RWMutex
 	streams map[uint32]*stream
 	accepts chan *stream
+	passwd  []byte
+	pwn     int
+	prn     int
 	ctx     context.Context
 	cancel  context.CancelFunc
 }
@@ -139,7 +142,7 @@ func (mux *muxer) read() {
 
 	var header frameHeader
 	for {
-		_, err := io.ReadFull(mux.tran, header[:])
+		err := mux.readFull(header[:])
 		if err != nil {
 			break
 		}
@@ -164,7 +167,7 @@ func (mux *muxer) read() {
 			_ = stm.closeError(io.EOF, false)
 		} else if size > 0 && (flag == flagSYN || flag == flagDAT) {
 			dat := make([]byte, size)
-			if _, err = io.ReadFull(mux.tran, dat); err == nil {
+			if err = mux.readFull(dat); err == nil {
 				_, err = stm.receive(dat)
 			}
 			if err != nil {
@@ -181,5 +184,28 @@ func (mux *muxer) write(flag uint8, sid uint32, p []byte) (int, error) {
 	mux.wmu.Lock()
 	defer mux.wmu.Unlock()
 
+	if psz := len(mux.passwd); psz != 0 {
+		for i, b := range dat {
+			mux.pwn = (mux.pwn + 1) % psz
+			enc := mux.passwd[mux.pwn]
+			dat[i] = b ^ enc
+		}
+	}
+
 	return mux.tran.Write(dat)
+}
+
+// readFull 读取消息
+func (mux *muxer) readFull(data []byte) error {
+	if _, err := io.ReadFull(mux.tran, data); err != nil {
+		return err
+	}
+	if psz := len(mux.passwd); psz != 0 {
+		for i, b := range data {
+			mux.pwn = (mux.pwn + 1) % psz
+			enc := mux.passwd[mux.pwn]
+			data[i] = b ^ enc
+		}
+	}
+	return nil
 }

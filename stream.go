@@ -17,9 +17,9 @@ type stream struct {
 	syn    bool        // 是否已经发送了握手帧
 	wmu    sync.Locker // 数据写锁
 	cond   *sync.Cond
-	buf    *bytes.Buffer
-	err    error       // 错误信息
-	closed atomic.Bool // 保证 close 方法只被执行一次
+	buf    *bytes.Buffer // 消息缓冲池
+	err    error         // 错误信息
+	closed atomic.Bool   // 保证 close 方法只被执行一次
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -88,7 +88,7 @@ func (stm *stream) Close() error {
 
 func (stm *stream) receive(p []byte) (int, error) {
 	stm.cond.L.Lock()
-	n, err := stm.buf.Write(p)
+	n, err := stm.buf.Write(p) // FIXME: 尚未实现流控
 	stm.cond.L.Unlock()
 
 	stm.cond.Broadcast()

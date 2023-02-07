@@ -10,6 +10,7 @@ type option struct {
 	backlog  int
 	capacity int
 	server   bool
+	passwd   []byte
 }
 
 type Option func(*option)
@@ -32,6 +33,12 @@ func WithCapacity(n int) Option {
 	}
 }
 
+func WithEncrypt(passwd []byte) Option {
+	return func(opt *option) {
+		opt.passwd = passwd
+	}
+}
+
 func (opt option) muxer(tran net.Conn) *muxer {
 	backlog := opt.backlog
 	maxsize := opt.maxsize
@@ -45,12 +52,14 @@ func (opt option) muxer(tran net.Conn) *muxer {
 	if capacity <= 0 {
 		capacity = 64
 	}
+	passwd := opt.passwd
 
 	ctx, cancel := context.WithCancel(context.Background())
 	mux := &muxer{
 		tran:    tran,
 		streams: make(map[uint32]*stream, capacity),
 		accepts: make(chan *stream, backlog),
+		passwd:  passwd,
 		ctx:     ctx,
 		cancel:  cancel,
 	}
